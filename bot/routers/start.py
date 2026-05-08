@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import BufferedInputFile, InputMediaDocument, Message
 
 from bot.config import Settings
 from bot.google_sheets import (
@@ -14,14 +14,16 @@ from bot.google_sheets import (
     rows_to_xlsx_bytes,
     user_message_for_sheets_error,
 )
+from bot.pdf_export import rows_to_pdf_bytes
 
 router = Router(name="start")
 log = logging.getLogger(__name__)
 
 HELP_TEXT = (
     "Salom!\n\n"
-    "KOD ni yuboring — faqat shu kodli qatorlar + sarlavha Excelda "
-    "(«KOD» ustuni faylda chiqmaydi).\n"
+    "KOD ni yuboring — shu kod bo‘yicha qatorlar: bir xil jadval "
+    "Excel (.xlsx) va chiroyli PDF ko‘rinishida yuboriladi "
+    "(«KOD» ustuni ikkala faylda ham chiqmaydi).\n"
     "Oxirida «umumiy» qatori: Paket soni, Og‘irlik, Hajm, Summa yig‘indilari "
     "(Qabul sana ustunida yozuv).\n\n"
     "Ko‘p qatorli sarlavha bo‘lsa GOOGLE_SHEETS_HEADER_ROWS ni sozlang."
@@ -63,21 +65,42 @@ async def on_kod_message(message: Message, settings: Settings) -> None:
         await message.answer(err or "Noma’lum xato.")
         return
 
-    try:
-        xlsx = await asyncio.to_thread(rows_to_xlsx_bytes, table)
-    except Exception:
-        log.exception("Excel yaratishda xato")
-        await message.answer("Excel faylini tayyorlashda xatolik yuz berdi.")
-        return
-
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
-    safe = re.sub(r'[<>:"/\\|?*]', "_", kod)[:60]
-    filename = f"kod_{safe}_{stamp}.xlsx"
     hdr = settings.google_sheets_header_rows
     data_rows = max(0, len(table) - hdr - 1)
-    await message.answer_document(
-        BufferedInputFile(xlsx, filename=filename),
-        caption=(
-            f"KOD: {kod} — {data_rows} ta qator + {hdr} sarlavha + umumiy qator."
-        ),
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    safe = re.sub(r'[<>:"/\\|?*]', "_", kod)[:60]
+    filename_xlsx = f"kod_{safe}_{stamp}.xlsx"
+    filename_pdf = f"kod_{safe}_{stamp}.pdf"
+
+    try:
+        xlsx, pdf = await asyncio.gather(
+            asyncio.to_thread(rows_to_xlsx_bytes, table),
+            asyncio.to_thread(
+                rows_to_pdf_bytes,
+                table,
+                header_row_count=hdr,
+                title=f"KOD: {kod}",
+            ),
+        )
+    except Exception:
+        log.exception("Excel yoki PDF yaratishda xato")
+        await message.answer("Fayllarni tayyorlashda xatolik yuz berdi.")
+        return
+
+    caption = (
+        f"KOD: {kod} — {data_rows} ta qator + {hdr} sarlavha + umumiy qator. "
+        "Excel va PDF."
+    )
+    await message.bot.send_media_group(
+        message.chat.id,
+        media=[
+            InputMediaDocument(
+                media=BufferedInputFile(xlsx, filename=filename_xlsx),
+                caption=caption,
+            ),
+            InputMediaDocument(
+                media=BufferedInputFile(pdf, filename=filename_pdf),
+            ),
+        ],
+        reply_to_message_id=message.message_id,
     )
