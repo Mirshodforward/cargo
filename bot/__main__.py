@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import load_settings
 from bot.middlewares import SettingsMiddleware
@@ -16,7 +17,7 @@ logging.basicConfig(
 
 async def main() -> None:
     settings = load_settings()
-    dispatcher = Dispatcher()
+    dispatcher = Dispatcher(storage=MemoryStorage())
     dispatcher.update.middleware(SettingsMiddleware(settings))
 
     register_routers(dispatcher)

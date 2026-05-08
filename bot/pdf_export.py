@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -17,6 +18,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _FONT_REGISTERED: str | None = None
+
+
+def _draw_footer(canvas: Any, doc: Any, *, text: str, font: str) -> None:
+    """Har sahifa pastki qismi (mijoz tili)."""
+    canvas.saveState()
+    canvas.setFont(font, 7)
+    canvas.setFillColor(colors.HexColor("#64748b"))
+    canvas.drawString(doc.leftMargin, 10, text)
+    canvas.restoreState()
 
 
 def _cell_text(val: Any) -> str:
@@ -67,11 +77,18 @@ def rows_to_pdf_bytes(
     *,
     header_row_count: int,
     title: str = "",
+    header_title: str = "",
+    header_code_line: str = "",
+    footer_line: str = "",
 ) -> bytes:
     """
     ``rows`` — Excel bilan bir xil tartibda (KOD ustuni olib tashlangandan keyin ham).
     Birinchi ``header_row_count`` qatori sarlavha, oxirgi qator — umumiy (ajratib chiziladi).
     Sahifa doim **landscape** (gorizontal), shriftlar kichik — keng jadval uchun.
+
+    ``header_title`` / ``header_code_line`` — jadval ustidagi matn (mijoz tili).
+    ``footer_line`` — har sahifa pastida (mijoz tili).
+    ``title`` — eski API; bo‘sh bo‘lmasa ``header_title`` dan keyin qo‘shiladi.
     """
     if not rows:
         rows = [[""]]
@@ -114,12 +131,48 @@ def rows_to_pdf_bytes(
         textColor=colors.HexColor("#1f2937"),
         spaceAfter=6,
     )
+    head_main = ParagraphStyle(
+        name="CargoPdfHeaderMain",
+        parent=styles["Normal"],
+        fontName=font,
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor("#0f172a"),
+        alignment=TA_CENTER,
+        spaceAfter=3,
+    )
+    head_sub = ParagraphStyle(
+        name="CargoPdfHeaderSub",
+        parent=styles["Normal"],
+        fontName=font,
+        fontSize=10,
+        leading=12,
+        textColor=colors.HexColor("#334155"),
+        alignment=TA_CENTER,
+        spaceAfter=6,
+    )
     story: list[Any] = []
+    if header_title.strip():
+        story.append(
+            Paragraph(
+                escape(header_title).replace("\n", "<br/>"),
+                head_main,
+            )
+        )
+    if header_code_line.strip():
+        story.append(
+            Paragraph(
+                escape(header_code_line).replace("\n", "<br/>"),
+                head_sub,
+            )
+        )
     if title.strip():
         story.append(
             Paragraph(escape(title).replace("\n", "<br/>"), title_style)
         )
-        story.append(Spacer(1, 4 * mm))
+        story.append(Spacer(1, 2 * mm))
+    elif header_title.strip() or header_code_line.strip():
+        story.append(Spacer(1, 2 * mm))
 
     nrows = len(data)
     last_is_total = nrows > header_row_count
@@ -182,5 +235,13 @@ def rows_to_pdf_bytes(
     tbl.setStyle(ts)
     story.append(tbl)
 
-    doc.build(story)
+    foot = footer_line.strip()
+    if foot:
+
+        def _on_page(canvas: Any, doc: Any) -> None:
+            _draw_footer(canvas, doc, text=foot, font=font)
+
+        doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    else:
+        doc.build(story)
     return buf.getvalue()
