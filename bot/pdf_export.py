@@ -71,6 +71,7 @@ def rows_to_pdf_bytes(
     """
     ``rows`` — Excel bilan bir xil tartibda (KOD ustuni olib tashlangandan keyin ham).
     Birinchi ``header_row_count`` qatori sarlavha, oxirgi qator — umumiy (ajratib chiziladi).
+    Sahifa doim **landscape** (gorizontal), shriftlar kichik — keng jadval uchun.
     """
     if not rows:
         rows = [[""]]
@@ -96,10 +97,10 @@ def rows_to_pdf_bytes(
     doc = SimpleDocTemplate(
         buf,
         pagesize=page,
-        leftMargin=margin,
-        rightMargin=margin,
-        topMargin=margin,
-        bottomMargin=margin,
+        leftMargin=margin_h,
+        rightMargin=margin_h,
+        topMargin=margin_v,
+        bottomMargin=margin_v,
         title="Yuk",
     )
 
@@ -108,10 +109,10 @@ def rows_to_pdf_bytes(
         name="CargoTitle",
         parent=styles["Normal"],
         fontName=font,
-        fontSize=11,
-        leading=14,
+        fontSize=9,
+        leading=11,
         textColor=colors.HexColor("#1f2937"),
-        spaceAfter=8,
+        spaceAfter=6,
     )
     story: list[Any] = []
     if title.strip():
@@ -138,16 +139,21 @@ def rows_to_pdf_bytes(
     total_bg = colors.HexColor("#fef3c7")
     grid = colors.HexColor("#cbd5e1")
 
+    # Kichik shrift + keng sahifa — gorizontalda ko‘proq matn sig‘adi
+    fz_body = 5 if ncols > 14 else (6 if ncols > 10 else 7)
+    fz_head = fz_body + 1
+    fz_total = fz_body + 1
+
     ts = TableStyle(
         [
             ("FONTNAME", (0, 0), (-1, -1), font),
-            ("FONTSIZE", (0, 0), (-1, -1), 7 if ncols > 10 else 8),
+            ("FONTSIZE", (0, 0), (-1, -1), fz_body),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (0, header_depth), (-1, -1), "CENTER"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
             ("BOX", (0, 0), (-1, -1), 0.6, grid),
             ("INNERGRID", (0, 0), (-1, -1), 0.25, grid),
         ]
@@ -157,7 +163,7 @@ def rows_to_pdf_bytes(
         ts.add("BACKGROUND", (0, 0), (-1, header_depth - 1), header_bg)
         ts.add("TEXTCOLOR", (0, 0), (-1, header_depth - 1), header_fg)
         ts.add("FONTNAME", (0, 0), (-1, header_depth - 1), font)
-        ts.add("FONTSIZE", (0, 0), (-1, header_depth - 1), 8 if ncols > 10 else 9)
+        ts.add("FONTSIZE", (0, 0), (-1, header_depth - 1), fz_head)
     if header_depth <= nrows - 2:
         ts.add(
             "ROWBACKGROUNDS",
@@ -170,7 +176,7 @@ def rows_to_pdf_bytes(
         ts.add("BACKGROUND", (0, nrows - 1), (-1, nrows - 1), total_bg)
         ts.add("TEXTCOLOR", (0, nrows - 1), (-1, nrows - 1), colors.HexColor("#92400e"))
         ts.add("FONTNAME", (0, nrows - 1), (-1, nrows - 1), font)
-        ts.add("FONTSIZE", (0, nrows - 1), (-1, nrows - 1), 8 if ncols > 10 else 9)
+        ts.add("FONTSIZE", (0, nrows - 1), (-1, nrows - 1), fz_total)
         ts.add("LINEABOVE", (0, nrows - 1), (-1, nrows - 1), 1, colors.HexColor("#f59e0b"))
 
     tbl.setStyle(ts)

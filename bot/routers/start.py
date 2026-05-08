@@ -5,13 +5,12 @@ from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import BufferedInputFile, InputMediaDocument, Message
+from aiogram.types import BufferedInputFile, Message
 
 from bot.config import Settings
 from bot.google_sheets import (
     build_kod_export_with_totals,
     fetch_values,
-    rows_to_xlsx_bytes,
     user_message_for_sheets_error,
 )
 from bot.pdf_export import rows_to_pdf_bytes
@@ -20,13 +19,8 @@ router = Router(name="start")
 log = logging.getLogger(__name__)
 
 HELP_TEXT = (
-    "Salom!\n\n"
-    "KOD ni yuboring — shu kod bo‘yicha qatorlar: bir xil jadval "
-    "Excel (.xlsx) va chiroyli PDF ko‘rinishida yuboriladi "
-    "(«KOD» ustuni ikkala faylda ham chiqmaydi).\n"
-    "Oxirida «umumiy» qatori: Paket soni, Og‘irlik, Hajm, Summa yig‘indilari "
-    "(Qabul sana ustunida yozuv).\n\n"
-    "Ko‘p qatorli sarlavha bo‘lsa GOOGLE_SHEETS_HEADER_ROWS ni sozlang."
+    "Assalomu alaykum! Xush kelibsiz.\n\n"
+    "Iltimos, KOD raqamingizni kiriting!"
 )
 
 
@@ -41,6 +35,14 @@ async def on_kod_message(message: Message, settings: Settings) -> None:
     if not kod:
         return
 
+    loading_msg = await message.answer("⏳")
+
+    async def clear_loading() -> None:
+        try:
+            await loading_msg.delete()
+        except Exception:
+            pass
+
     try:
         rows = await asyncio.to_thread(
             fetch_values,
@@ -49,6 +51,7 @@ async def on_kod_message(message: Message, settings: Settings) -> None:
             settings.google_sheets_export_range,
         )
     except Exception as e:
+        await clear_loading()
         await message.answer(user_message_for_sheets_error(e))
         return
 
@@ -62,45 +65,31 @@ async def on_kod_message(message: Message, settings: Settings) -> None:
         totals_text_column_label=settings.google_sheets_totals_text_column,
     )
     if err or table is None:
+        await clear_loading()
         await message.answer(err or "Noma’lum xato.")
         return
 
     hdr = settings.google_sheets_header_rows
-    data_rows = max(0, len(table) - hdr - 1)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
     safe = re.sub(r'[<>:"/\\|?*]', "_", kod)[:60]
-    filename_xlsx = f"kod_{safe}_{stamp}.xlsx"
     filename_pdf = f"kod_{safe}_{stamp}.pdf"
 
     try:
-        xlsx, pdf = await asyncio.gather(
-            asyncio.to_thread(rows_to_xlsx_bytes, table),
-            asyncio.to_thread(
-                rows_to_pdf_bytes,
-                table,
-                header_row_count=hdr,
-                title=f"KOD: {kod}",
-            ),
+        pdf = await asyncio.to_thread(
+            rows_to_pdf_bytes,
+            table,
+            header_row_count=hdr,
+            title="",
         )
     except Exception:
-        log.exception("Excel yoki PDF yaratishda xato")
-        await message.answer("Fayllarni tayyorlashda xatolik yuz berdi.")
+        log.exception("PDF yaratishda xato")
+        await clear_loading()
+        await message.answer("PDF tayyorlashda xatolik yuz berdi.")
         return
 
-    caption = (
-        f"KOD: {kod} — {data_rows} ta qator + {hdr} sarlavha + umumiy qator. "
-        "Excel va PDF."
-    )
-    await message.bot.send_media_group(
-        message.chat.id,
-        media=[
-            InputMediaDocument(
-                media=BufferedInputFile(xlsx, filename=filename_xlsx),
-                caption=caption,
-            ),
-            InputMediaDocument(
-                media=BufferedInputFile(pdf, filename=filename_pdf),
-            ),
-        ],
+    await clear_loading()
+
+    await message.answer_document(
+        BufferedInputFile(pdf, filename=filename_pdf),
         reply_to_message_id=message.message_id,
     )
