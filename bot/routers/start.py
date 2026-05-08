@@ -46,9 +46,10 @@ async def on_kod_message(message: Message, settings: Settings) -> None:
     try:
         rows = await asyncio.to_thread(
             fetch_values,
-            settings.google_sheets_credentials_path,
             settings.google_spreadsheet_id,
             settings.google_sheets_export_range,
+            credentials_path=settings.google_sheets_credentials_path,
+            service_account_info=settings.google_service_account_info,
         )
     except Exception as e:
         await clear_loading()

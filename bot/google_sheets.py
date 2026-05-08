@@ -20,14 +20,34 @@ log = logging.getLogger(__name__)
 SCOPES = ("https://www.googleapis.com/auth/spreadsheets",)
 
 
-def _service(credentials_path: str):
-    creds = Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+def _credentials(
+    credentials_path: str | None,
+    service_account_info: dict[str, Any] | None,
+) -> Credentials:
+    if service_account_info is not None:
+        return Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+    if credentials_path:
+        return Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
+    raise ValueError("Google service account: .env yoki JSON fayl yo‘q")
+
+
+def _service(
+    credentials_path: str | None,
+    service_account_info: dict[str, Any] | None,
+):
+    creds = _credentials(credentials_path, service_account_info)
     return build("sheets", "v4", credentials=creds, cache_discovery=False)
 
 
-def fetch_values(credentials_path: str, spreadsheet_id: str, range_a1: str) -> list[list[Any]]:
+def fetch_values(
+    spreadsheet_id: str,
+    range_a1: str,
+    *,
+    credentials_path: str | None = None,
+    service_account_info: dict[str, Any] | None = None,
+) -> list[list[Any]]:
     """Jadvaldan qiymatlarni o‘qish (sinxron). asyncio.to_thread orqali chaqiring."""
-    svc = _service(credentials_path)
+    svc = _service(credentials_path, service_account_info)
     result = (
         svc.spreadsheets()
         .values()
