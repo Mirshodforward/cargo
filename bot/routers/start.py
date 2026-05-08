@@ -4,14 +4,15 @@ import re
 from datetime import datetime, timezone
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     BufferedInputFile,
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
+    KeyboardButton,
     Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
 
 from bot.config import Settings
@@ -34,60 +35,65 @@ from bot.pdf_export import rows_to_pdf_bytes
 router = Router(name="start")
 log = logging.getLogger(__name__)
 
-_LANG_ORDER = (LANG_RU, LANG_EN, LANG_ZH, LANG_UZ, LANG_TR)
+
+class UserStates(StatesGroup):
+    choosing_language = State()
 
 
-def _language_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Русский язык 🇷🇺", callback_data="set_lang:ru"
-                ),
-                InlineKeyboardButton(
-                    text="English language 🇬🇧", callback_data="set_lang:en"
-                ),
-            ],
-            [
-                InlineKeyboardButton(text="中文 🇨🇳", callback_data="set_lang:zh"),
-                InlineKeyboardButton(
-                    text="O'zbek tili 🇺🇿", callback_data="set_lang:uz"
-                ),
-            ],
-            [
-                InlineKeyboardButton(text="Türkçe 🇹🇷", callback_data="set_lang:tr"),
-            ],
-        ]
+# Reply keyboard matnlari — foydalanuvchi xabari bilan aniq solishtiriladi
+BTN_RU = "Русский язык 🇷🇺"
+BTN_EN = "English language 🇬🇧"
+BTN_ZH = "中文 🇨🇳"
+BTN_UZ = "O'zbek tili 🇺🇿"
+BTN_TR = "Türkçe 🇹🇷"
+
+_REPLY_TEXT_TO_LANG: dict[str, str] = {
+    BTN_RU: LANG_RU,
+    BTN_EN: LANG_EN,
+    BTN_ZH: LANG_ZH,
+    BTN_UZ: LANG_UZ,
+    BTN_TR: LANG_TR,
+}
+
+
+def _language_reply_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_RU), KeyboardButton(text=BTN_EN)],
+            [KeyboardButton(text=BTN_ZH), KeyboardButton(text=BTN_UZ)],
+            [KeyboardButton(text=BTN_TR)],
+        ],
+        resize_keyboard=True,
+        input_field_placeholder="Til / Language",
     )
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
+    await state.set_state(UserStates.choosing_language)
     await message.answer(
         t(LANG_EN, "welcome"),
-        reply_markup=_language_keyboard(),
+        reply_markup=_language_reply_keyboard(),
     )
 
 
-@router.callback_query(F.data.startswith("set_lang:"))
-async def on_language_chosen(callback: CallbackQuery, state: FSMContext) -> None:
-    lang = (callback.data or "").split(":", 1)[-1].strip().lower()
-    if lang not in _LANG_ORDER:
-        await callback.answer()
+@router.message(UserStates.choosing_language, F.text)
+async def on_language_reply(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    lang = _REPLY_TEXT_TO_LANG.get(raw)
+    if not lang:
+        await message.answer(t(LANG_EN, "pick_language_button"))
         return
     await state.update_data(lang=lang)
-    await callback.answer()
-    msg = callback.message
-    if isinstance(msg, Message):
-        try:
-            await msg.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        await msg.answer(t(lang, "enter_code"))
+    await state.set_state(None)
+    await message.answer(
+        t(lang, "enter_code"),
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
-@router.message(F.text, ~F.text.startswith("/"))
+@router.message(~StateFilter(UserStates.choosing_language), F.text, ~F.text.startswith("/"))
 async def on_kod_message(message: Message, state: FSMContext, settings: Settings) -> None:
     data = await state.get_data()
     lang = data.get("lang")

@@ -33,6 +33,13 @@ STRINGS: dict[str, dict[str, str]] = {
         LANG_UZ: "Avval /start bosing va tilni tanlang.",
         LANG_TR: "Önce /start’a basın ve dil seçin.",
     },
+    "pick_language_button": {
+        LANG_RU: "Нажмите одну из кнопок внизу.",
+        LANG_EN: "Tap one of the buttons below.",
+        LANG_ZH: "请点击下方其中一个按钮。",
+        LANG_UZ: "Pastdagi tugmalardan birini bosing.",
+        LANG_TR: "Aşağıdaki düğmelerden birine basın.",
+    },
     "pdf_error": {
         LANG_RU: "Не удалось подготовить PDF.",
         LANG_EN: "Could not prepare the PDF.",
