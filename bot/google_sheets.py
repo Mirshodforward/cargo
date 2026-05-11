@@ -161,13 +161,13 @@ def lookup_unique_kods_by_number(
     data_start: int | None = None
     header_block: list[list[Any]] = []
 
-    scan_limit = min(12, len(rows))
+    scan_limit = min(15, len(rows))
     for i in range(scan_limit):
         hr = rows[i]
         if not hr:
             continue
-        a = find_kod_column_index(hr, number_header)
-        b = find_kod_column_index(hr, kod_header)
+        a = find_column_index_prefer_exact([hr], number_header)
+        b = find_kod_column_index_multi([hr], kod_header)
         if a is not None and b is not None:
             i_num, i_kod = a, b
             data_start = i + 1
@@ -329,6 +329,51 @@ def find_column_index_in_header_block(
     return None
 
 
+def find_kod_column_index_multi(
+    header_rows: list[list[Any]],
+    kod_header: str,
+) -> int | None:
+    """
+    KOD ustuni: bir nechta sarlavha qatori (masalan КОД, 编码, KOD) ichidan qidirish.
+    """
+    h = (kod_header or "KOD").strip()
+    if not header_rows:
+        return None
+    idx = find_column_index_in_header_block(header_rows, h)
+    if idx is not None:
+        return idx
+    idx = find_column_index_prefer_exact(header_rows, h)
+    if idx is not None:
+        return idx
+    if h.upper() == "KOD":
+        for alt in ("КОД", "код", "编码", "代码", "CODE"):
+            idx = find_column_index_in_header_block(header_rows, alt)
+            if idx is not None:
+                return idx
+    return None
+
+
+def _first_data_row_with_kod_in_column(
+    rows: list[list[Any]],
+    col_idx: int,
+    kod_value: str,
+    *,
+    max_scan: int = 3000,
+) -> int | None:
+    """``col_idx`` ustunida ``kod_value`` birinchi marta uchraydigan qator indeksi."""
+    needle = kod_value.strip()
+    if not needle:
+        return None
+    limit = min(len(rows), max(1, max_scan))
+    for i in range(limit):
+        padded = _pad_row_to_length(rows[i], col_idx + 1)
+        if col_idx >= len(padded):
+            continue
+        if _cell_as_kod_string(padded[col_idx]) == needle:
+            return i
+    return None
+
+
 def parse_sheet_number(val: Any) -> float | None:
     """Vergul bilan o‘nlik sonlar (0,09594) va oddiy sonlar."""
     if val is None or val == "":
@@ -447,7 +492,7 @@ def build_kod_export_with_totals(
     totals_text: str,
     totals_text_column_label: str,
 ) -> tuple[list[list[Any]] | None, str | None]:
-    table, err = filter_rows_by_kod(
+    table, err, eff_header = filter_rows_by_kod(
         rows,
         kod_value,
         kod_header=kod_header,
@@ -457,12 +502,12 @@ def build_kod_export_with_totals(
         return None, err
     with_totals = append_umumiy_row(
         table,
-        header_row_count=header_row_count,
+        header_row_count=eff_header,
         sum_column_labels=sum_column_labels,
         totals_text=totals_text,
         totals_text_column_label=totals_text_column_label,
     )
-    kod_idx = find_kod_column_index(with_totals[0], kod_header)
+    kod_idx = find_kod_column_index_multi(with_totals[:eff_header], kod_header)
     if kod_idx is not None:
         with_totals = drop_column_from_rows(with_totals, kod_idx)
     return (with_totals, None)
@@ -474,46 +519,65 @@ def filter_rows_by_kod(
     *,
     kod_header: str = "KOD",
     header_row_count: int = 1,
-) -> tuple[list[list[Any]] | None, str | None]:
+) -> tuple[list[list[Any]] | None, str | None, int]:
     """
-    Birinchi ``header_row_count`` qator — sarlavha (filtr qo‘llanmaydi).
-    Keyingi qatorlarda ``kod_header`` ustuni ``kod_value`` ga teng bo‘lsa, qator olinadi.
-    Barcha ustunlar (KOD bilan birga) Excel uchun qaytariladi.
-    """
-    if not rows:
-        return None, "Jadval bo‘sh."
-    if len(rows) < header_row_count + 1:
-        return None, (
-            "Jadvalda ma'lumot qatorlari kam. Sarlavha qatorlari soni "
-            "(GOOGLE_SHEETS_HEADER_ROWS) yoki jadval oralig‘i noto‘g‘ri bo‘lishi mumkin."
-        )
+    Birinchi ``header_row_count`` qatori — sarlavha (filtr qo‘llanmaydi), lekin
+    «KOD» ustuni pastki sarlavha qatorida bo‘lsa (КОД / 编码 / KOD) avtomatik topiladi,
+    ma’lumot boshlanishi — shu KOD ustunida qiymat birinchi marta uchragan qator.
 
-    header = rows[0]
-    idx = find_kod_column_index(header, kod_header)
-    if idx is None:
-        return None, (
-            f"Jadvalning birinchi qatorida «{kod_header}» ustuni topilmadi. "
-            "Sarlavha qatorini tekshiring."
-        )
+    Qaytadi: ``(jadval, xato_yoki_None, sarlavha_qatorlari_soni)``.
+    """
+    n_param = max(1, int(header_row_count))
+    if not rows:
+        return None, "Jadval bo‘sh.", n_param
 
     needle = kod_value.strip()
     if not needle:
-        return None, "KOD bo‘sh. Raqam yoki kodni yuboring."
+        return None, "KOD bo‘sh. Raqam yoki kodni yuboring.", n_param
 
-    block = rows[0:header_row_count]
-    data = rows[header_row_count:]
+    scan = min(len(rows), max(n_param, 20))
+    header_scan = rows[:scan]
+    idx = find_kod_column_index_multi(header_scan, kod_header)
+    if idx is None:
+        return None, (
+            f"Jadval sarlavhalarida «{kod_header}» ustuni topilmadi (KOD / КОД / 编码). "
+            "GOOGLE_SHEETS_HEADER_ROWS ni tekshiring (ko‘p tilli sarlavhada odatda 3)."
+        ), n_param
+
+    first_hit = _first_data_row_with_kod_in_column(rows, idx, needle)
+    if first_hit is not None:
+        effective_header = first_hit if first_hit >= 1 else max(1, n_param)
+        if first_hit < n_param:
+            log.warning(
+                "KOD qiymati %s-qatordan boshlanadi, GOOGLE_SHEETS_HEADER_ROWS=%s — "
+                "PDF uchun sarlavha soni avtomatik moslashtirildi.",
+                first_hit + 1,
+                n_param,
+            )
+    else:
+        effective_header = n_param
+
+    if len(rows) <= effective_header:
+        return None, (
+            "Jadvalda ma'lumot qatorlari kam. Sarlavha qatorlari soni "
+            "(GOOGLE_SHEETS_HEADER_ROWS) yoki jadval oralig‘i noto‘g‘ri bo‘lishi mumkin."
+        ), effective_header
+
+    block = rows[0:effective_header]
+    data = rows[effective_header:]
     matched: list[list[Any]] = list(block)
     for row in data:
-        if idx >= len(row):
+        padded = _pad_row_to_length(row, idx + 1)
+        if idx >= len(padded):
             continue
-        cell = _cell_as_kod_string(row[idx])
+        cell = _cell_as_kod_string(padded[idx])
         if cell == needle:
             matched.append(row)
 
     if len(matched) <= len(block):
-        return None, f"«{needle}» KOD bo‘yicha qator topilmadi."
+        return None, f"«{needle}» KOD bo‘yicha qator topilmadi.", effective_header
 
-    return matched, None
+    return matched, None, effective_header
 
 
 def _http_error_detail(exc: HttpError) -> str:
