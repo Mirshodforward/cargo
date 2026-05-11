@@ -15,6 +15,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from openpyxl import Workbook
 
+from bot.phone_utils import normalize_phone_digits
+
 log = logging.getLogger(__name__)
 
 SCOPES = ("https://www.googleapis.com/auth/spreadsheets",)
@@ -83,7 +85,43 @@ def find_kod_column_index(header_row: list[Any], kod_header: str) -> int | None:
     return None
 
 
+def lookup_unique_kods_by_number(
+    rows: list[list[Any]],
+    phone_digits: str,
+    *,
+    number_header: str = "NUMBER",
+    kod_header: str = "KOD",
+) -> list[str]:
+    """
+    Birinchi qator — sarlavha. ``phone_digits`` — ``normalize_phone_digits`` natijasi.
+    Mos kelgan qatorlardan KOD qiymatlari (takrorlarsiz, tartiblangan).
+    """
+
+    if not rows or len(rows) < 2:
+        return []
+    header = rows[0]
+    i_num = find_kod_column_index(header, number_header)
+    i_kod = find_kod_column_index(header, kod_header)
+    if i_num is None or i_kod is None:
+        log.warning("Lookup: «%s» yoki «%s» ustuni topilmadi.", number_header, kod_header)
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for row in rows[1:]:
+        raw = row[i_num] if i_num < len(row) else ""
+        key = normalize_phone_digits(_cell_as_kod_string(raw))
+        if not key or key != phone_digits:
+            continue
+        kod = _cell_as_kod_string(row[i_kod]) if i_kod < len(row) else ""
+        if kod and kod not in seen:
+            seen.add(kod)
+            out.append(kod)
+    out.sort(key=lambda x: (len(x), x))
+    return out
+
+
 def _normalize_for_match(s: str) -> str:
+    """Sarlavha matni uchun normalizatsiya."""
     t = str(s).strip()
     t = unicodedata.normalize("NFKC", t).upper()
     t = t.replace("\ufeff", "").replace("\u200b", "")

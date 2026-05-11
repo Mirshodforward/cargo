@@ -72,6 +72,8 @@ class Settings:
     google_service_account_info: dict[str, Any] | None
     google_spreadsheet_id: str
     google_sheets_export_range: str
+    google_sheets_lookup_range: str
+    google_sheets_number_header: str
     google_sheets_kod_header: str
     google_sheets_header_rows: int
     google_sheets_sum_columns: tuple[str, ...]
@@ -88,6 +90,8 @@ def load_settings() -> Settings:
     sa_info = _service_account_from_env()
     sheet_id = os.getenv("GOOGLE_SPREADSHEET_ID", "").strip()
     export_range = os.getenv("GOOGLE_SHEETS_EXPORT_RANGE", "Sheet1").strip()
+    lookup_range = os.getenv("GOOGLE_SHEETS_LOOKUP_RANGE", "yuk2!A:ZZ").strip()
+    number_header = os.getenv("GOOGLE_SHEETS_NUMBER_HEADER", "NUMBER").strip() or "NUMBER"
     kod_header = os.getenv("GOOGLE_SHEETS_KOD_HEADER", "KOD").strip() or "KOD"
 
     raw_header_rows = os.getenv("GOOGLE_SHEETS_HEADER_ROWS", "1").strip()
@@ -133,6 +137,8 @@ def load_settings() -> Settings:
         google_service_account_info=sa_res,
         google_spreadsheet_id=sheet_id,
         google_sheets_export_range=export_range,
+        google_sheets_lookup_range=lookup_range,
+        google_sheets_number_header=number_header,
         google_sheets_kod_header=kod_header,
         google_sheets_header_rows=header_rows,
         google_sheets_sum_columns=sum_columns,

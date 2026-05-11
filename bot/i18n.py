@@ -103,6 +103,55 @@ STRINGS: dict[str, dict[str, str]] = {
         LANG_UZ: "Tayyorlangan: {when}",
         LANG_TR: "Oluşturulma: {when}",
     },
+    "share_contact": {
+        LANG_RU: "Отправьте свой контакт — мы проверим номер в базе.",
+        LANG_EN: "Share your contact so we can verify your number in the database.",
+        LANG_ZH: "请发送您的联系人，以便我们在数据库中验证号码。",
+        LANG_UZ: "Kontaktingizni yuboring — raqamingiz bazada tekshiriladi.",
+        LANG_TR: "Kişinizi paylaşın — numaranızı veritabanında doğrulayalım.",
+    },
+    "contact_share_btn": {
+        LANG_RU: "📱 Отправить контакт",
+        LANG_EN: "📱 Share contact",
+        LANG_ZH: "📱 分享联系人",
+        LANG_UZ: "📱 Kontaktni ulash",
+        LANG_TR: "📱 Kişiyi paylaş",
+    },
+    "customer_not_found": {
+        LANG_RU: "Клиент не найден в базе данных.",
+        LANG_EN: "Customer not found in the database.",
+        LANG_ZH: "数据库中未找到该客户。",
+        LANG_UZ: "Mijoz ma'lumotlar bazasida topilmadi!",
+        LANG_TR: "Müşteri veritabanında bulunamadı.",
+    },
+    "customer_found_codes": {
+        LANG_RU: "Номер найден.\nВаши коды:\n{codes}\n\nОтправьте один из кодов сообщением — пришлём PDF.",
+        LANG_EN: "Number found.\nYour codes:\n{codes}\n\nSend one code as a message to get the PDF.",
+        LANG_ZH: "号码已找到。\n您的代码：\n{codes}\n\n请发送其中一个代码以获取 PDF。",
+        LANG_UZ: "Raqam topildi.\nKodlaringiz:\n{codes}\n\nPDF olish uchun kodlardan birini yozib yuboring.",
+        LANG_TR: "Numara bulundu.\nKodlarınız:\n{codes}\n\nPDF için kodlardan birini mesaj olarak gönderin.",
+    },
+    "kod_not_in_list": {
+        LANG_RU: "Этот код не привязан к вашему номеру. Отправьте код из списка.",
+        LANG_EN: "This code is not linked to your number. Send a code from the list above.",
+        LANG_ZH: "此代码与您的号码不匹配。请发送上方列表中的代码。",
+        LANG_UZ: "Bu kod sizning raqamingizga tegishli emas. Yuqoridagi ro‘yxatdan kod yuboring.",
+        LANG_TR: "Bu kod numaranıza bağlı değil. Yukarıdaki listeden bir kod gönderin.",
+    },
+    "contact_invalid": {
+        LANG_RU: "Не удалось прочитать номер телефона.",
+        LANG_EN: "Could not read the phone number from the contact.",
+        LANG_ZH: "无法读取联系人中的电话号码。",
+        LANG_UZ: "Telefon raqamini o‘qib bo‘lmadi.",
+        LANG_TR: "Telefon numarası okunamadı.",
+    },
+    "contact_text_only": {
+        LANG_RU: "Используйте кнопку «Отправить контакт».",
+        LANG_EN: "Please use the «Share contact» button.",
+        LANG_ZH: "请使用「分享联系人」按钮。",
+        LANG_UZ: "«Kontaktni ulash» tugmasidan foydalaning.",
+        LANG_TR: "Lütfen «Kişiyi paylaş» düğmesini kullanın.",
+    },
 }
 
 
