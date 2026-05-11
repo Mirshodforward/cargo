@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart, StateFilter
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -85,6 +85,22 @@ def _contact_reply_keyboard(lang: str) -> ReplyKeyboardMarkup:
     )
 
 
+def _kod_choice_keyboard(kods: tuple[str, ...]) -> ReplyKeyboardMarkup:
+    """Har bir KOD alohida tugma; qatorlarda 2 tadan."""
+    keyboard: list[list[KeyboardButton]] = []
+    lst = list(kods)
+    for i in range(0, len(lst), 2):
+        row = [KeyboardButton(text=lst[i])]
+        if i + 1 < len(lst):
+            row.append(KeyboardButton(text=lst[i + 1]))
+        keyboard.append(row)
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard,
+        resize_keyboard=True,
+        input_field_placeholder="Kod",
+    )
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
@@ -160,14 +176,13 @@ async def on_contact_shared(message: Message, state: FSMContext, settings: Setti
         )
         return
 
-    codes_block = "\n".join(f"• {k}" for k in kods)
-    await state.update_data(allowed_kods=tuple(kods))
+    allowed = tuple(kods)
+    await state.update_data(allowed_kods=allowed)
     await state.set_state(UserStates.waiting_kod)
     await message.answer(
-        t(lang, "customer_found_codes", codes=codes_block),
-        reply_markup=ReplyKeyboardRemove(),
+        t(lang, "customer_found_codes"),
+        reply_markup=_kod_choice_keyboard(allowed),
     )
-    await message.answer(t(lang, "enter_code"))
 
 
 @router.message(UserStates.waiting_contact, F.text)
@@ -255,4 +270,5 @@ async def on_kod_message(message: Message, state: FSMContext, settings: Settings
     await message.answer_document(
         BufferedInputFile(pdf, filename=filename_pdf),
         reply_to_message_id=message.message_id,
+        reply_markup=ReplyKeyboardRemove(),
     )
