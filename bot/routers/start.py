@@ -146,6 +146,7 @@ async def on_contact_shared(message: Message, state: FSMContext, settings: Setti
         digits,
         number_header=settings.google_sheets_number_header,
         kod_header=settings.google_sheets_kod_header,
+        header_row_count=settings.google_sheets_header_rows,
     )
     try:
         await loading.delete()

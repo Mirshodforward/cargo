@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 
 def normalize_phone_digits(phone: str | None) -> str | None:
@@ -12,7 +13,20 @@ def normalize_phone_digits(phone: str | None) -> str | None:
     """
     if not phone:
         return None
-    d = re.sub(r"\D", "", phone.strip())
+    s = unicodedata.normalize("NFKC", str(phone).strip())
+    for ch in (
+        "\ufeff",
+        "\u200b",
+        "\u200e",
+        "\u200f",
+        "\u202a",
+        "\u202c",
+        "\xa0",
+        "\u202f",
+    ):
+        s = s.replace(ch, "")
+    s = s.strip().strip("'\"")
+    d = re.sub(r"\D", "", s)
     if not d:
         return None
     if d.startswith("998") and len(d) >= 11:

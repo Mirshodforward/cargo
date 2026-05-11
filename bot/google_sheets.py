@@ -85,34 +85,118 @@ def find_kod_column_index(header_row: list[Any], kod_header: str) -> int | None:
     return None
 
 
+def find_column_index_prefer_exact(
+    header_rows: list[list[Any]],
+    label: str,
+) -> int | None:
+    """Avvalo aniq sarlavha (NUMBER, KOD); bo‘lmasa ``find_column_index_in_header_block``."""
+    for hr in header_rows:
+        if not hr:
+            continue
+        idx = find_kod_column_index(hr, label)
+        if idx is not None:
+            return idx
+    return find_column_index_in_header_block(header_rows, label)
+
+
+def _sheet_cell_to_local_phone_digits(cell_raw: Any) -> str | None:
+    """
+    Jadvaldagi raqam (matn, float, yashirin belgilar, '941339383 matn) → 9 raqam.
+    """
+    s = _cell_as_kod_string(cell_raw)
+    if not s:
+        return None
+    s = unicodedata.normalize("NFKC", s)
+    for ch in (
+        "\ufeff",
+        "\u200b",
+        "\u200e",
+        "\u200f",
+        "\u202a",
+        "\u202c",
+        "\xa0",
+        "\u202f",
+    ):
+        s = s.replace(ch, "")
+    s = s.strip().strip("'\"")
+    if not s:
+        return None
+    # "941339383.0", ilmiy notatsiya (Google/Excel matn sifatida)
+    if re.fullmatch(r"-?\d+(\.\d+)?([eE][+-]?\d+)?", s.replace(",", ".")):
+        try:
+            f = float(s.replace(",", "."))
+            if math.isfinite(f) and f.is_integer() and abs(f) < 1e15:
+                s = str(int(f))
+        except (ValueError, OverflowError):
+            pass
+    return normalize_phone_digits(s)
+
+
+def _pad_row_to_length(row: list[Any], min_len: int) -> list[Any]:
+    if len(row) >= min_len:
+        return row
+    return list(row) + [""] * (min_len - len(row))
+
+
 def lookup_unique_kods_by_number(
     rows: list[list[Any]],
     phone_digits: str,
     *,
     number_header: str = "NUMBER",
     kod_header: str = "KOD",
+    header_row_count: int = 1,
 ) -> list[str]:
     """
-    Birinchi qator — sarlavha. ``phone_digits`` — ``normalize_phone_digits`` natijasi.
+    Birinchi ``header_row_count`` qator — sarlavha bloki.
+    ``phone_digits`` — ``normalize_phone_digits`` (Telegram kontakt) natijasi.
     Mos kelgan qatorlardan KOD qiymatlari (takrorlarsiz, tartiblangan).
     """
 
     if not rows or len(rows) < 2:
         return []
-    header = rows[0]
-    i_num = find_kod_column_index(header, number_header)
-    i_kod = find_kod_column_index(header, kod_header)
+    n_header = max(1, int(header_row_count))
+
+    i_num: int | None = None
+    i_kod: int | None = None
+    data_start: int | None = None
+    header_block: list[list[Any]] = []
+
+    scan_limit = min(12, len(rows))
+    for i in range(scan_limit):
+        hr = rows[i]
+        if not hr:
+            continue
+        a = find_kod_column_index(hr, number_header)
+        b = find_kod_column_index(hr, kod_header)
+        if a is not None and b is not None:
+            i_num, i_kod = a, b
+            data_start = i + 1
+            header_block = rows[: data_start]
+
+    if i_num is None or i_kod is None or data_start is None:
+        header_block = rows[:n_header]
+        data_start = n_header
+        i_num = find_column_index_prefer_exact(header_block, number_header)
+        i_kod = find_column_index_prefer_exact(header_block, kod_header)
     if i_num is None or i_kod is None:
         log.warning("Lookup: «%s» yoki «%s» ustuni topilmadi.", number_header, kod_header)
         return []
+    if len(rows) <= data_start:
+        return []
+    min_width = max(
+        i_num + 1,
+        i_kod + 1,
+        max((len(r) for r in header_block), default=0),
+    )
     seen: set[str] = set()
     out: list[str] = []
-    for row in rows[1:]:
-        raw = row[i_num] if i_num < len(row) else ""
-        key = normalize_phone_digits(_cell_as_kod_string(raw))
+    for row in rows[data_start:]:
+        padded = _pad_row_to_length(row, min_width)
+        raw = padded[i_num] if i_num < len(padded) else ""
+        key = _sheet_cell_to_local_phone_digits(raw)
         if not key or key != phone_digits:
             continue
-        kod = _cell_as_kod_string(row[i_kod]) if i_kod < len(row) else ""
+        kod = _cell_as_kod_string(padded[i_kod]) if i_kod < len(padded) else ""
         if kod and kod not in seen:
             seen.add(kod)
             out.append(kod)
