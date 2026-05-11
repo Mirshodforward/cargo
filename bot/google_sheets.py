@@ -329,6 +329,27 @@ def find_column_index_in_header_block(
     return None
 
 
+def find_status_column_index_multi(header_rows: list[list[Any]]) -> int | None:
+    """Status ustuni: Status / Статус / 状态 va hokazo."""
+    for label in ("Status", "STATUS", "Статус", "СТАТУС", "状态", "狀態"):
+        i = find_column_index_in_header_block(header_rows, label)
+        if i is not None:
+            return i
+    return None
+
+
+def _status_cell_matches_filter(cell_raw: Any, status_filter: str) -> bool:
+    """``status_filter``: ``in_transit`` | ``arrived``."""
+    s = unicodedata.normalize("NFKC", str(cell_raw or "").strip())
+    s = s.replace("\xa0", " ").strip()
+    sl = s.lower()
+    if status_filter == "in_transit":
+        return "в пути" in sl
+    if status_filter == "arrived":
+        return sl.startswith("прибыв")
+    return True
+
+
 def find_kod_column_index_multi(
     header_rows: list[list[Any]],
     kod_header: str,
@@ -491,15 +512,17 @@ def build_kod_export_with_totals(
     sum_column_labels: tuple[str, ...],
     totals_text: str,
     totals_text_column_label: str,
-) -> tuple[list[list[Any]] | None, str | None]:
+    status_filter: str | None = None,
+) -> tuple[list[list[Any]] | None, str | None, int]:
     table, err, eff_header = filter_rows_by_kod(
         rows,
         kod_value,
         kod_header=kod_header,
         header_row_count=header_row_count,
+        status_filter=status_filter,
     )
     if err or table is None:
-        return None, err
+        return None, err, eff_header
     with_totals = append_umumiy_row(
         table,
         header_row_count=eff_header,
@@ -510,7 +533,7 @@ def build_kod_export_with_totals(
     kod_idx = find_kod_column_index_multi(with_totals[:eff_header], kod_header)
     if kod_idx is not None:
         with_totals = drop_column_from_rows(with_totals, kod_idx)
-    return (with_totals, None)
+    return (with_totals, None, eff_header)
 
 
 def filter_rows_by_kod(
@@ -519,11 +542,14 @@ def filter_rows_by_kod(
     *,
     kod_header: str = "KOD",
     header_row_count: int = 1,
+    status_filter: str | None = None,
 ) -> tuple[list[list[Any]] | None, str | None, int]:
     """
     Birinchi ``header_row_count`` qatori — sarlavha (filtr qo‘llanmaydi), lekin
     «KOD» ustuni pastki sarlavha qatorida bo‘lsa (КОД / 编码 / KOD) avtomatik topiladi,
     ma’lumot boshlanishi — shu KOD ustunida qiymat birinchi marta uchragan qator.
+
+    ``status_filter``: ``in_transit`` (В пути) yoki ``arrived`` (Прибыв…).
 
     Qaytadi: ``(jadval, xato_yoki_None, sarlavha_qatorlari_soni)``.
     """
@@ -543,6 +569,14 @@ def filter_rows_by_kod(
             f"Jadval sarlavhalarida «{kod_header}» ustuni topilmadi (KOD / КОД / 编码). "
             "GOOGLE_SHEETS_HEADER_ROWS ni tekshiring (ko‘p tilli sarlavhada odatda 3)."
         ), n_param
+
+    status_idx: int | None = None
+    if status_filter:
+        status_idx = find_status_column_index_multi(header_scan)
+        if status_idx is None:
+            return None, (
+                "Jadval sarlavhalarida «Status» ustuni topilmadi (Status / Статус / 状态)."
+            ), n_param
 
     first_hit = _first_data_row_with_kod_in_column(rows, idx, needle)
     if first_hit is not None:
@@ -565,18 +599,38 @@ def filter_rows_by_kod(
 
     block = rows[0:effective_header]
     data = rows[effective_header:]
-    matched: list[list[Any]] = list(block)
+    min_w = max(
+        idx + 1,
+        (status_idx + 1) if status_idx is not None else 0,
+        max((len(r) for r in header_scan), default=0),
+    )
+
+    kod_rows: list[list[Any]] = []
     for row in data:
-        padded = _pad_row_to_length(row, idx + 1)
+        padded = _pad_row_to_length(row, min_w)
         if idx >= len(padded):
             continue
         cell = _cell_as_kod_string(padded[idx])
         if cell == needle:
-            matched.append(row)
+            kod_rows.append(row)
 
-    if len(matched) <= len(block):
+    if not kod_rows:
         return None, f"«{needle}» KOD bo‘yicha qator topilmadi.", effective_header
 
+    if status_filter and status_idx is not None:
+        filtered: list[list[Any]] = []
+        for row in kod_rows:
+            padded = _pad_row_to_length(row, min_w)
+            raw_st = padded[status_idx] if status_idx < len(padded) else ""
+            if _status_cell_matches_filter(raw_st, status_filter):
+                filtered.append(row)
+        if not filtered:
+            return None, (
+                "Tanlangan status bo‘yicha qatorlar yo‘q (В пути yoki Прибывшие)."
+            ), effective_header
+        kod_rows = filtered
+
+    matched: list[list[Any]] = list(block) + kod_rows
     return matched, None, effective_header
 
 

@@ -20,6 +20,91 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 _FONT_REGISTERED: str | None = None
 
 
+def _register_cargo_table_font(path: Path) -> bool:
+    """TTF/OTF yoki TTC; xitoy/kirill/lotin uchun keng qamrovli shriftlar."""
+    if not path.is_file():
+        return False
+    suf = path.suffix.lower()
+    try:
+        if suf == ".ttc":
+            for idx in (0, 1, 2, 3):
+                try:
+                    pdfmetrics.registerFont(
+                        TTFont("CargoTableFont", str(path), subfontIndex=idx)
+                    )
+                    return True
+                except Exception:
+                    continue
+            return False
+        pdfmetrics.registerFont(TTFont("CargoTableFont", str(path)))
+        return True
+    except Exception:
+        return False
+
+
+def _unicode_font_candidate_paths() -> list[Path]:
+    """Tartib muhim: avvalo CJK qo‘llab-quvvatlaydigan shriftlar."""
+    paths: list[Path] = []
+    env = os.getenv("CARGO_PDF_FONT", "").strip()
+    if env:
+        paths.append(Path(env))
+
+    windir = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+    paths.extend(
+        [
+            windir / "msyh.ttc",
+            windir / "msyhl.ttc",
+            windir / "msyhbd.ttc",
+            windir / "simsun.ttc",
+            windir / "simsunb.ttf",
+            windir / "simhei.ttf",
+            windir / "msjhl.ttc",
+            windir / "malgun.ttf",
+            windir / "malgunbd.ttf",
+            windir / "segoeui.ttf",
+            windir / "arial.ttf",
+        ]
+    )
+
+    roots = (Path("/usr/share/fonts"), Path("/usr/local/share/fonts"))
+    noto_rel = (
+        "opentype/noto/NotoSansCJK-Regular.ttc",
+        "opentype/noto/NotoSansCJKsc-Regular.otf",
+        "noto-cjk/NotoSansCJK-Regular.ttc",
+        "truetype/noto/NotoSansCJK-Regular.ttc",
+        "truetype/noto/NotoSansSC-Regular.otf",
+        "opentype/noto/NotoSansSC-Regular.otf",
+    )
+    for root in roots:
+        for rel in noto_rel:
+            paths.append(root / rel)
+
+    paths.extend(
+        [
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+        ]
+    )
+
+    mac = Path("/System/Library/Fonts/Supplemental")
+    paths.extend(
+        [
+            mac / "Arial Unicode.ttf",
+            Path("/Library/Fonts/Arial Unicode.ttf"),
+        ]
+    )
+
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for p in paths:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(p)
+    return unique
+
+
 def _draw_footer(canvas: Any, doc: Any, *, text: str, font: str) -> None:
     """Har sahifa pastki qismi (mijoz tili)."""
     canvas.saveState()
@@ -44,29 +129,10 @@ def _pick_unicode_font_name() -> str:
     if _FONT_REGISTERED is not None:
         return _FONT_REGISTERED
 
-    candidates: list[Path] = []
-    windir = os.environ.get("WINDIR", r"C:\Windows")
-    candidates.extend(
-        [
-            Path(windir) / "Fonts" / "arial.ttf",
-            Path(windir) / "Fonts" / "segoeui.ttf",
-        ]
-    )
-    candidates.extend(
-        [
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
-        ]
-    )
-
-    for p in candidates:
-        if p.is_file():
-            try:
-                pdfmetrics.registerFont(TTFont("CargoTableFont", str(p)))
-                _FONT_REGISTERED = "CargoTableFont"
-                return _FONT_REGISTERED
-            except Exception:
-                continue
+    for p in _unicode_font_candidate_paths():
+        if _register_cargo_table_font(p):
+            _FONT_REGISTERED = "CargoTableFont"
+            return _FONT_REGISTERED
 
     _FONT_REGISTERED = "Helvetica"
     return _FONT_REGISTERED

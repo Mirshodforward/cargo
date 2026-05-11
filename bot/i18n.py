@@ -125,11 +125,11 @@ STRINGS: dict[str, dict[str, str]] = {
         LANG_TR: "Müşteri veritabanında bulunamadı.",
     },
     "customer_found_codes": {
-        LANG_RU: "Номер найден. Нажмите один из кодов ниже — отправим PDF.",
-        LANG_EN: "Number found. Tap one of the codes below to get the PDF.",
-        LANG_ZH: "号码已找到。请点击下方其中一个代码以获取 PDF。",
-        LANG_UZ: "Raqam topildi. PDF olish uchun pastdagi kod tugmalaridan birini bosing.",
-        LANG_TR: "Numara bulundu. PDF için aşağıdaki kod düğmelerinden birine basın.",
+        LANG_RU: "Номер найден. Сначала выберите код, затем тип груза (кнопки внизу) — пришлём PDF.",
+        LANG_EN: "Number found. Pick a code, then the shipment type below — we’ll send the PDF.",
+        LANG_ZH: "号码已找到。请先选择代码，再选择货物类型 — 我们将发送 PDF。",
+        LANG_UZ: "Raqam topildi. Avval kodni, keyin yuk turini (pastdagi tugmalar) tanlang — PDF yuboramiz.",
+        LANG_TR: "Numara bulundu. Önce kodu, sonra yük türünü seçin — PDF göndeririz.",
     },
     "kod_not_in_list": {
         LANG_RU: "Этот код не подходит. Нажмите одну из кнопок ниже.",
@@ -173,6 +173,69 @@ STRINGS: dict[str, dict[str, str]] = {
         LANG_UZ: "Fayl Telegram uchun juda katta (~50 MB cheklovi). Jadvalni kichraytiring yoki GOOGLE_SHEETS_LIST_CELL_RANGE ni toraytiring.",
         LANG_TR: "Dosya Telegram limitini aşıyor (~50 MB). Tabloyu küçültün veya GOOGLE_SHEETS_LIST_CELL_RANGE değerini daraltın.",
     },
+    "pick_status_filter": {
+        LANG_RU: "Выберите категорию груза для PDF:",
+        LANG_EN: "Choose the shipment category for the PDF:",
+        LANG_ZH: "请选择要导出 PDF 的货物类别：",
+        LANG_UZ: "PDF uchun yuk toifasini tanlang:",
+        LANG_TR: "PDF için yük kategorisini seçin:",
+    },
+    "status_filter_btn_in_transit": {
+        LANG_RU: "Товары в пути",
+        LANG_EN: "Goods in transit",
+        LANG_ZH: "在途货物",
+        LANG_UZ: "Yo‘ldagi yuklar",
+        LANG_TR: "Yoldaki yükler",
+    },
+    "status_filter_btn_arrived": {
+        LANG_RU: "Прибывшие товары",
+        LANG_EN: "Arrived goods",
+        LANG_ZH: "已到货物",
+        LANG_UZ: "Kelgan yuklar",
+        LANG_TR: "Varış yapan yükler",
+    },
+    "status_filter_buttons_only": {
+        LANG_RU: "Нажмите одну из двух кнопок ниже.",
+        LANG_EN: "Please tap one of the two buttons below.",
+        LANG_ZH: "请点击下方两个按钮之一。",
+        LANG_UZ: "Pastdagi ikki tugmadan birini bosing.",
+        LANG_TR: "Lütfen aşağıdaki iki düğmeden birine basın.",
+    },
+    "pdf_line_status_in_transit": {
+        LANG_RU: "Фильтр: только «В пути»",
+        LANG_EN: "Filter: in transit only",
+        LANG_ZH: "筛选：仅「在途」",
+        LANG_UZ: "Filtr: faqat «Yo‘lda» (В пути)",
+        LANG_TR: "Filtre: yolda (В пути)",
+    },
+    "pdf_line_status_arrived": {
+        LANG_RU: "Фильтр: только прибывшие",
+        LANG_EN: "Filter: arrived only",
+        LANG_ZH: "筛选：仅已到",
+        LANG_UZ: "Filtr: faqat kelganlar (Прибывшие)",
+        LANG_TR: "Filtre: varmış",
+    },
+    "pdf_sent_pick_again": {
+        LANG_RU: "Можно выбрать другой код или категорию.",
+        LANG_EN: "You can pick another code or category.",
+        LANG_ZH: "可以选择其他代码或类别。",
+        LANG_UZ: "Boshqa kod yoki toifani tanlashingiz mumkin.",
+        LANG_TR: "Başka kod veya kategori seçebilirsiniz.",
+    },
+    "table_err_status_column": {
+        LANG_RU: "В заголовках таблицы не найдена колонка «Status» (Status / Статус / 状态).",
+        LANG_EN: "Could not find a «Status» column in the table headers (Status / Статус / 状态).",
+        LANG_ZH: "表头中找不到「状态」列。",
+        LANG_UZ: "Jadval sarlavhalarida «Status» ustuni topilmadi (Status / Статус / 状态).",
+        LANG_TR: "Tablo başlıklarında «Status» sütunu bulunamadı.",
+    },
+    "table_err_status_empty": {
+        LANG_RU: "Нет строк для выбранного статуса (В пути / прибывшие).",
+        LANG_EN: "No rows for the selected status (in transit / arrived).",
+        LANG_ZH: "所选状态下没有数据行。",
+        LANG_UZ: "Tanlangan status bo‘yicha qatorlar yo‘q (В пути yoki Прибывшие).",
+        LANG_TR: "Seçilen durum için satır yok.",
+    },
 }
 
 
@@ -191,9 +254,14 @@ def t(lang: str | None, key: str, **kwargs: Any) -> str:
 
 
 def localize_table_error(err: str, lang: str | None) -> str:
-    """Jadval/KOD xabarlari: o‘zbekcha asl matn yoki boshqa tillarda umumiy xabar."""
-    if (lang or DEFAULT_LANG) == LANG_UZ:
+    """Jadval/KOD xabarlari: o‘zbekcha asl matn yoki boshqa tillarda tarjima."""
+    code = (lang or DEFAULT_LANG).strip().lower()
+    if code == LANG_UZ:
         return err
+    if "«Status» ustuni topilmadi" in err:
+        return t(lang, "table_err_status_column")
+    if "Tanlangan status bo‘yicha qatorlar yo‘q" in err:
+        return t(lang, "table_err_status_empty")
     return t(lang, "sheets_generic")
 
 
