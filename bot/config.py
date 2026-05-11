@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -7,6 +9,56 @@ from typing import Any
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log = logging.getLogger(__name__)
+
+
+def normalize_google_sheets_range(value: str, *, default_cells: str = "A:ZZ") -> str:
+    """
+    A1 oralig‘ini xavfsizlashtirish.
+
+    - ``yuk2`` → ``yuk2!A:ZZ`` (faqat varaq nomi bo‘lsa ``!A:ZZ`` qo‘shiladi)
+    - ``yuk2!yuk2`` kabi xato (ikkinchi qism varaq nomi bilan bir xil) → ``yuk2!A:ZZ``
+    """
+    v = (value or "").strip()
+    cells_default = (default_cells or "A:ZZ").strip() or "A:ZZ"
+    if not v:
+        return f"Sheet1!{cells_default}"
+
+    if "!" not in v:
+        sheet = v.strip().strip("'\"")
+        return f"{_a1_sheet_segment(sheet)}!{cells_default}"
+
+    sheet_raw, _, cells_raw = v.partition("!")
+    sheet_raw = sheet_raw.strip()
+    cells_raw = cells_raw.strip()
+    sheet_name = sheet_raw.strip("'\"")
+    if not cells_raw:
+        return f"{_a1_sheet_segment(sheet_name)}!{cells_default}"
+
+    cells_cmp = cells_raw.strip("'\"")
+    # yuk2!yuk2 — Google «YUK2» katak oralig‘i deb o‘ylaydi va 400 qaytaradi
+    if cells_cmp.lower() == sheet_name.lower():
+        log.warning(
+            "GOOGLE_SHEETS range tuzatildi: «%s» ikki marta varaq nomi. "
+            "To‘g‘risi: «%s!%s»",
+            v,
+            sheet_name,
+            cells_default,
+        )
+        return f"{_a1_sheet_segment(sheet_name)}!{cells_default}"
+
+    return f"{_a1_sheet_segment(sheet_name)}!{cells_raw}"
+
+
+def _a1_sheet_segment(name: str) -> str:
+    """Varaq nomi: kerak bo‘lsa bitta qo'shtirnoq bilan."""
+    n = (name or "").strip().strip("'\"")
+    if not n:
+        return "Sheet1"
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", n):
+        return n
+    return "'" + n.replace("'", "''") + "'"
 
 
 def _service_account_from_env() -> dict[str, Any] | None:
@@ -90,8 +142,12 @@ def load_settings() -> Settings:
     creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH", "").strip() or None
     sa_info = _service_account_from_env()
     sheet_id = os.getenv("GOOGLE_SPREADSHEET_ID", "").strip()
-    export_range = os.getenv("GOOGLE_SHEETS_EXPORT_RANGE", "Sheet1").strip()
-    lookup_range = os.getenv("GOOGLE_SHEETS_LOOKUP_RANGE", "yuk2!A:ZZ").strip()
+    export_range = normalize_google_sheets_range(
+        os.getenv("GOOGLE_SHEETS_EXPORT_RANGE", "Sheet1").strip(),
+    )
+    lookup_range = normalize_google_sheets_range(
+        os.getenv("GOOGLE_SHEETS_LOOKUP_RANGE", "yuk2!A:ZZ").strip(),
+    )
     number_header = os.getenv("GOOGLE_SHEETS_NUMBER_HEADER", "NUMBER").strip() or "NUMBER"
     kod_header = os.getenv("GOOGLE_SHEETS_KOD_HEADER", "KOD").strip() or "KOD"
 
