@@ -79,6 +79,7 @@ class Settings:
     google_sheets_sum_columns: tuple[str, ...]
     google_sheets_totals_text: str
     google_sheets_totals_text_column: str
+    google_sheets_list_cell_range: str
 
 
 def load_settings() -> Settings:
@@ -114,6 +115,8 @@ def load_settings() -> Settings:
         or "Qabul sana"
     )
 
+    list_cell_range = os.getenv("GOOGLE_SHEETS_LIST_CELL_RANGE", "A:ZZ").strip() or "A:ZZ"
+
     if not sheet_id:
         raise RuntimeError("GOOGLE_SPREADSHEET_ID majburiy (Google Sheets).")
 
@@ -144,4 +147,5 @@ def load_settings() -> Settings:
         google_sheets_sum_columns=sum_columns,
         google_sheets_totals_text=totals_text,
         google_sheets_totals_text_column=totals_col,
+        google_sheets_list_cell_range=list_cell_range,
     )

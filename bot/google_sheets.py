@@ -492,3 +492,144 @@ def rows_to_xlsx_bytes(
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def sheet_title_to_a1_range(sheet_title: str, cell_range: str = "A:ZZ") -> str:
+    """Varaq nomi uchun A1 notatsiya (maxsus belgilar va apostrof)."""
+    inner = str(sheet_title).replace("'", "''")
+    cr = (cell_range or "A:ZZ").strip() or "A:ZZ"
+    return f"'{inner}'!{cr}"
+
+
+def _sanitize_excel_sheet_title(raw: str) -> str:
+    t = str(raw).strip() or "Sheet"
+    for ch in r':\/*?[]':
+        t = t.replace(ch, "_")
+    t = t[:31] or "S"
+    return t
+
+
+def _unique_worksheet_titles(raw_titles: list[str]) -> list[str]:
+    used_lower: set[str] = set()
+    out: list[str] = []
+    for raw in raw_titles:
+        base = _sanitize_excel_sheet_title(raw)
+        name = base
+        n = 1
+        while name.lower() in used_lower:
+            suffix = f"_{n}"
+            max_base = max(1, 31 - len(suffix))
+            name = (base[:max_base] + suffix)[:31]
+            n += 1
+        used_lower.add(name.lower())
+        out.append(name)
+    return out
+
+
+def fetch_spreadsheet_sheet_titles(
+    spreadsheet_id: str,
+    *,
+    credentials_path: str | None = None,
+    service_account_info: dict[str, Any] | None = None,
+) -> list[str]:
+    """Jadvaldagi barcha varaqlar (UI tartibi bo‘yicha)."""
+    svc = _service(credentials_path, service_account_info)
+    meta = (
+        svc.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets.properties",
+        )
+        .execute()
+    )
+    pairs: list[tuple[int, str]] = []
+    for sh in meta.get("sheets", []):
+        prop = sh.get("properties") or {}
+        title = str(prop.get("title") or "Sheet").strip() or "Sheet"
+        try:
+            idx = int(prop.get("index", 0))
+        except (TypeError, ValueError):
+            idx = 0
+        pairs.append((idx, title))
+    pairs.sort(key=lambda x: x[0])
+    return [t for _, t in pairs]
+
+
+def batch_get_values_ranges(
+    spreadsheet_id: str,
+    ranges: list[str],
+    *,
+    credentials_path: str | None = None,
+    service_account_info: dict[str, Any] | None = None,
+) -> list[list[list[Any]]]:
+    """``ranges`` tartibida har bir oralik uchun qiymatlar jadvali."""
+    if not ranges:
+        return []
+    svc = _service(credentials_path, service_account_info)
+    chunk_size = 50
+    grids: list[list[list[Any]]] = []
+    for offset in range(0, len(ranges), chunk_size):
+        chunk = ranges[offset : offset + chunk_size]
+        result = (
+            svc.spreadsheets()
+            .values()
+            .batchGet(spreadsheetId=spreadsheet_id, ranges=chunk)
+            .execute()
+        )
+        vrs = result.get("valueRanges", [])
+        if len(vrs) != len(chunk):
+            log.warning(
+                "batchGet: chunk %s so‘rov, valueRanges %s",
+                len(chunk),
+                len(vrs),
+            )
+        for j in range(len(chunk)):
+            if j < len(vrs):
+                grids.append(vrs[j].get("values") or [])
+            else:
+                grids.append([])
+    return grids
+
+
+def full_spreadsheet_to_xlsx_bytes(
+    spreadsheet_id: str,
+    *,
+    cell_range: str = "A:ZZ",
+    credentials_path: str | None = None,
+    service_account_info: dict[str, Any] | None = None,
+) -> bytes:
+    """
+    Barcha varaqlarni bitta .xlsx da: har bir varaq uchun ``cell_range`` (masalan A:ZZ).
+    """
+    titles = fetch_spreadsheet_sheet_titles(
+        spreadsheet_id,
+        credentials_path=credentials_path,
+        service_account_info=service_account_info,
+    )
+    if not titles:
+        raise ValueError("Jadvalda varaq topilmadi.")
+    ranges = [sheet_title_to_a1_range(t, cell_range) for t in titles]
+    grids = batch_get_values_ranges(
+        spreadsheet_id,
+        ranges,
+        credentials_path=credentials_path,
+        service_account_info=service_account_info,
+    )
+    ws_names = _unique_worksheet_titles(titles)
+
+    wb = Workbook()
+    first = True
+    for rows, ws_title in zip(grids, ws_names):
+        if first:
+            ws = wb.active
+            ws.title = ws_title
+            first = False
+        else:
+            ws = wb.create_sheet(title=ws_title)
+        for ri, row in enumerate(rows, start=1):
+            for ci, val in enumerate(row, start=1):
+                ws.cell(row=ri, column=ci, value="" if val is None else val)
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

@@ -152,6 +152,27 @@ STRINGS: dict[str, dict[str, str]] = {
         LANG_UZ: "«Kontaktni ulash» tugmasidan foydalaning.",
         LANG_TR: "Lütfen «Kişiyi paylaş» düğmesini kullanın.",
     },
+    "list_exporting": {
+        LANG_RU: "⏳ Собираю все листы в Excel (.xlsx)…",
+        LANG_EN: "⏳ Building Excel (.xlsx) from all sheets…",
+        LANG_ZH: "⏳ 正在将所有工作表导出为 Excel (.xlsx)…",
+        LANG_UZ: "⏳ Barcha varaqlar Excel (.xlsx) ga yig‘ilmoqda…",
+        LANG_TR: "⏳ Tüm sayfalar Excel (.xlsx) olarak hazırlanıyor…",
+    },
+    "list_caption": {
+        LANG_RU: "Экспорт Google Sheets (все вкладки).",
+        LANG_EN: "Google Sheets export (all tabs).",
+        LANG_ZH: "Google 表格导出（所有工作表）。",
+        LANG_UZ: "Google Sheets eksporti (barcha varaqlar).",
+        LANG_TR: "Google Sheets dışa aktarımı (tüm sekmeler).",
+    },
+    "list_too_large": {
+        LANG_RU: "Файл слишком большой для Telegram (лимит ~50 МБ). Уменьшите таблицу или диапазон GOOGLE_SHEETS_LIST_CELL_RANGE.",
+        LANG_EN: "File is too large for Telegram (~50 MB limit). Reduce the sheet or narrow GOOGLE_SHEETS_LIST_CELL_RANGE.",
+        LANG_ZH: "文件超过 Telegram 上限（约 50 MB）。请缩小表格或调整 GOOGLE_SHEETS_LIST_CELL_RANGE。",
+        LANG_UZ: "Fayl Telegram uchun juda katta (~50 MB cheklovi). Jadvalni kichraytiring yoki GOOGLE_SHEETS_LIST_CELL_RANGE ni toraytiring.",
+        LANG_TR: "Dosya Telegram limitini aşıyor (~50 MB). Tabloyu küçültün veya GOOGLE_SHEETS_LIST_CELL_RANGE değerini daraltın.",
+    },
 }
 
 
