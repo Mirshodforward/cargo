@@ -339,7 +339,7 @@ def find_status_column_index_multi(header_rows: list[list[Any]]) -> int | None:
 
 
 def _status_cell_matches_filter(cell_raw: Any, status_filter: str) -> bool:
-    """``status_filter``: ``in_transit`` | ``arrived``."""
+    """``status_filter``: ``in_transit`` | ``arrived`` | ``picked_up`` (Забрал / olib ketilgan)."""
     s = unicodedata.normalize("NFKC", str(cell_raw or "").strip())
     s = s.replace("\xa0", " ").strip()
     sl = s.lower()
@@ -347,6 +347,17 @@ def _status_cell_matches_filter(cell_raw: Any, status_filter: str) -> bool:
         return "в пути" in sl
     if status_filter == "arrived":
         return sl.startswith("прибыв")
+    if status_filter == "picked_up":
+        return (
+            "забрал" in sl
+            or "забран" in sl
+            or "olib ket" in sl
+            or "picked up" in sl
+            or "collected" in sl
+            or "已取" in s
+            or "领取" in s
+            or "teslim al" in sl
+        )
     return True
 
 
@@ -549,7 +560,7 @@ def filter_rows_by_kod(
     «KOD» ustuni pastki sarlavha qatorida bo‘lsa (КОД / 编码 / KOD) avtomatik topiladi,
     ma’lumot boshlanishi — shu KOD ustunida qiymat birinchi marta uchragan qator.
 
-    ``status_filter``: ``in_transit`` (В пути) yoki ``arrived`` (Прибыв…).
+    ``status_filter``: ``in_transit`` (В пути), ``arrived`` (Прибыв…) yoki ``picked_up`` (Забрал).
 
     Qaytadi: ``(jadval, xato_yoki_None, sarlavha_qatorlari_soni)``.
     """
@@ -626,7 +637,7 @@ def filter_rows_by_kod(
                 filtered.append(row)
         if not filtered:
             return None, (
-                "Tanlangan status bo‘yicha qatorlar yo‘q (В пути yoki Прибывшие)."
+                "Tanlangan status bo‘yicha qatorlar yo‘q (В пути / Прибывшие / Забрал)."
             ), effective_header
         kod_rows = filtered
 

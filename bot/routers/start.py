@@ -111,6 +111,7 @@ def _status_filter_keyboard(lang: str) -> ReplyKeyboardMarkup:
                 KeyboardButton(text=t(lang, "status_filter_btn_in_transit")),
                 KeyboardButton(text=t(lang, "status_filter_btn_arrived")),
             ],
+            [KeyboardButton(text=t(lang, "status_filter_btn_picked_up"))],
         ],
         resize_keyboard=True,
     )
@@ -123,6 +124,8 @@ def _status_filter_id_from_button_text(text: str) -> str | None:
             return "in_transit"
         if raw == t(code, "status_filter_btn_arrived"):
             return "arrived"
+        if raw == t(code, "status_filter_btn_picked_up"):
+            return "picked_up"
     return None
 
 
@@ -182,6 +185,8 @@ async def _build_and_send_kod_pdf(
         line_code = line_code + "\n" + t(lang, "pdf_line_status_in_transit")
     elif status_filter == "arrived":
         line_code = line_code + "\n" + t(lang, "pdf_line_status_arrived")
+    elif status_filter == "picked_up":
+        line_code = line_code + "\n" + t(lang, "pdf_line_status_picked_up")
 
     try:
         pdf = await asyncio.to_thread(
